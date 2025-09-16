@@ -2,6 +2,15 @@ import streamlit as st
 import pandas as pd
 import io
 
+# --- Password protection ---
+st.sidebar.title("Login")
+password = st.sidebar.text_input("Enter password", type="password")
+
+# ✅ Password is "workshop"
+if password != "workshop":
+    st.warning("Please enter the correct password to access the app.")
+    st.stop()
+
 # --- Bonus ladder function ---
 def calculate_bonus(diff_percent, baseline):
     """Calculate bonus using 5% ladder logic."""
@@ -24,31 +33,29 @@ def calculate_bonus(diff_percent, baseline):
 # --- Load Excel data ---
 def load_data(file):
     xls = pd.ExcelFile(file)
-    agents = pd.read_excel(xls, "Agents")
+    cmms = pd.read_excel(xls, "Agents")      # rename sheet to "Agents" but column = CMM
     perf = pd.read_excel(xls, "Performance")
     buckets = pd.read_excel(xls, "Buckets")
-    return agents, perf, buckets
+    return cmms, perf, buckets
 
 
-# --- Streamlit UI ---
 st.title("Quarterly Bonus Calculator 💰")
 
-# File uploader
+# --- File uploader ---
 uploaded_file = st.file_uploader("Upload latest Excel file", type=["xlsx"])
 
 if uploaded_file:
     st.info("Using uploaded Excel file ✅")
-    agents_df, perf_df, buckets_df = load_data(uploaded_file)
-    # Keep a copy in memory for re-download
+    cmms_df, perf_df, buckets_df = load_data(uploaded_file)
     uploaded_bytes = uploaded_file.getvalue()
 else:
     st.warning("No Excel uploaded. Using default bonus_calculator.xlsx (demo data).")
-    default_path = "bonus_calculator.xlsx"  # make sure this file exists in repo
-    agents_df, perf_df, buckets_df = load_data(default_path)
+    default_path = "bonus_calculator.xlsx"
+    cmms_df, perf_df, buckets_df = load_data(default_path)
     with open(default_path, "rb") as f:
         uploaded_bytes = f.read()
 
-# Allow download of the current Excel file
+# --- Download current Excel file ---
 st.download_button(
     label="Download Current Excel File",
     data=uploaded_bytes,
@@ -56,25 +63,25 @@ st.download_button(
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
-# Choose mode
-view_mode = st.radio("Choose view:", ["Single Agent", "All Agents"])
+# --- Choose view ---
+view_mode = st.radio("Choose view:", ["Single CMM", "All CMMs"])
 
-if view_mode == "Single Agent":
-    agent_name = st.selectbox("Select an agent", agents_df["Agent"].unique())
+if view_mode == "Single CMM":
+    cmm_name = st.selectbox("Select a CMM", cmms_df["CMM"].unique())
 
-    if agent_name:
-        agent_info = agents_df[agents_df["Agent"] == agent_name].iloc[0]
-        perf_info = perf_df[perf_df["Agent"] == agent_name].iloc[0]
+    if cmm_name:
+        cmm_info = cmms_df[cmms_df["CMM"] == cmm_name].iloc[0]
+        perf_info = perf_df[perf_df["CMM"] == cmm_name].iloc[0]
 
-        salary = agent_info["Quarterly Salary"]
-        bonus_pool = agent_info["Bonus Pool (40%)"]
-        baseline = agent_info["Baseline Bonus"]
+        salary = cmm_info["Quarterly Salary"]
+        bonus_pool = cmm_info["Bonus Pool (40%)"]
+        baseline = cmm_info["Baseline Bonus"]
         actual = perf_info["Actual OTP Elkjop"]
         target = perf_info["Target OTP Elkjop"]
         diff_percent = actual - target
 
-        st.subheader(f"Agent: {agent_name}")
-        st.write(f"**Country:** {agent_info['Country']}")
+        st.subheader(f"CMM: {cmm_name}")
+        st.write(f"**Country:** {cmm_info['Country']}")
         st.write(f"**Quarterly Salary:** {salary:,.0f}")
         st.write(f"**Bonus Pool (40%):** {bonus_pool:,.0f}")
         st.write(f"**Baseline Bonus:** {baseline:,.0f}")
@@ -85,20 +92,20 @@ if view_mode == "Single Agent":
         payout = calculate_bonus(diff_percent, baseline)
         st.success(f"**Calculated Bonus Payout: {payout:,.0f} NOK**")
 
-elif view_mode == "All Agents":
+elif view_mode == "All CMMs":
     results = []
-    for _, row in agents_df.iterrows():
-        name = row["Agent"]
+    for _, row in cmms_df.iterrows():
+        name = row["CMM"]
         baseline = row["Baseline Bonus"]
         salary = row["Quarterly Salary"]
         country = row["Country"]
 
-        perf_row = perf_df[perf_df["Agent"] == name].iloc[0]
+        perf_row = perf_df[perf_df["CMM"] == name].iloc[0]
         diff_percent = perf_row["Actual OTP Elkjop"] - perf_row["Target OTP Elkjop"]
         payout = calculate_bonus(diff_percent, baseline)
 
         results.append({
-            "Agent": name,
+            "CMM": name,
             "Country": country,
             "Quarterly Salary": salary,
             "Baseline Bonus": baseline,
@@ -107,7 +114,7 @@ elif view_mode == "All Agents":
         })
 
     summary_df = pd.DataFrame(results)
-    st.subheader("All Agents Bonus Summary")
+    st.subheader("All CMM Bonus Summary")
     st.dataframe(summary_df)
 
     # Allow CSV download of results
@@ -119,6 +126,6 @@ elif view_mode == "All Agents":
         mime="text/csv",
     )
 
-# Show buckets for reference
+# --- Show Buckets for reference ---
 st.subheader("Bonus Buckets (for reference)")
 st.dataframe(buckets_df)
